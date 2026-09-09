@@ -1,0 +1,46 @@
+name: Build jetpack-5.1.2-aarch64 sysroot
+
+# Manual trigger only for now -- the first few releases are being
+# validated by hand before this gets wired to something more automatic
+# (e.g. a tag push).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version suffix (e.g. v1)"
+        required: true
+        default: v1
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build sysroot
+        run: |
+          docker buildx build \
+            --target sysroot \
+            --output type=tar,dest=sysroot.tar \
+            jetpack-5.1.2-aarch64
+
+      - name: Compress
+        run: gzip -9 sysroot.tar
+
+      - name: Checksum
+        run: sha256sum sysroot.tar.gz | tee sysroot.tar.gz.sha256
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="jetpack-5.1.2-aarch64-${{ inputs.version }}"
+          gh release create "$tag" \
+            sysroot.tar.gz sysroot.tar.gz.sha256 \
+            --title "$tag" \
+            --notes "Minimal aarch64 sysroot for JetPack 5.1.2 (L4T R35.4.1, Ubuntu 20.04 Focal)."
