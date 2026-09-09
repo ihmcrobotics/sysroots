@@ -51,7 +51,16 @@ RUN mkdir /debs && cd /debs && apt-get download \
 #   2. Rewrite absolute symlinks to relative (see
 #      fix_absolute_symlinks.py's own docstring).
 FROM ubuntu:20.04 AS assemble
-COPY --from=base_rootfs / /sysroot/
+# Only usr/ and lib/ (headers + link libraries) -- not the whole rootfs.
+# The rest (etc/, dev/, proc/, var/, ...) isn't needed to compile/link,
+# and some of it actively breaks the build: Ubuntu's base image ships
+# systemd unit "masks" as symlinks to /dev/null (e.g.
+# etc/systemd/system/default.target.wants/e2scrub_reap.service), which
+# Bazel's sandboxing can't hash ("file type ... is not supported") when
+# it walks the sysroot as a source directory. Confirmed by hitting that
+# exact error with a whole-rootfs copy.
+COPY --from=base_rootfs /usr /sysroot/usr
+COPY --from=base_rootfs /lib /sysroot/lib
 COPY --from=fetch_debs /debs /debs
 RUN for deb in /debs/*.deb; do dpkg-deb -x "$deb" /sysroot; done && rm -rf /debs
 
