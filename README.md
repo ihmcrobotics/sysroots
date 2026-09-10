@@ -39,15 +39,19 @@ GitHub Release tagged `jetpack-5.1.2-aarch64-v1`.
 
 ## Consuming from a downstream repo
 
-In the consuming repo's `MODULE.bazel`:
+In the consuming repo's `MODULE.bazel` (`http_archive` is a Bazel
+built-in -- no extra `bazel_dep` needed):
 
 ```python
-sysroot = use_repo_rule("@toolchains_llvm//toolchain:sysroot.bzl", "sysroot")
+http_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
-sysroot(
+http_archive(
     name = "jetson_sysroot",
     url = "https://github.com/<org>/sysroots/releases/download/jetpack-5.1.2-aarch64-v1/sysroot.tar.gz",
     sha256 = "<sha256 from the release page>",
+    build_file_content = """\
+filegroup(name = "sysroot", srcs = glob(["**"], allow_empty = True), visibility = ["//visibility:public"])
+""",
 )
 
 llvm.sysroot(
@@ -56,6 +60,13 @@ llvm.sysroot(
     label = "@jetson_sysroot//:sysroot",
 )
 ```
+
+(An earlier version of this README pointed at
+`@toolchains_llvm//toolchain:sysroot.bzl`'s `sysroot` rule for this --
+that rule doesn't actually exist in `toolchains_llvm` 1.9.0. `llvm.sysroot`'s
+`label` attribute just needs *any* label whose package directory holds the
+sysroot content, which a plain `http_archive` + `filegroup` already gives
+it -- no dedicated fetch rule needed.)
 
 This replaces a hardcoded local filesystem path with a hash-pinned fetch
 -- every machine (and CI, eventually) gets byte-identical sysroot
